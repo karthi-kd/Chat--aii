@@ -1,5 +1,7 @@
 fastapi
 uvicorn
-openai
 python-multipart
+pydantic
+openai
 python-dotenv
+
