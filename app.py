@@ -1,16 +1,14 @@
- 
-from fastapi import FastAPI, Form
+from fastapi import FastAPI, Form, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from openai import OpenAI
 import os
 from dotenv import load_dotenv
 
-load_dotenv()  # Loads .env
+load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 app = FastAPI(title="My ChatGPT AI")
 
-# Allow frontend requests
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -19,18 +17,44 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ChatGPT-style endpoint
 @app.post("/chat")
-def chat(prompt: str = Form(...)):
+async def chat(
+    prompt: str = Form(""),
+    image: UploadFile = File(None)
+):
     try:
+        messages = [
+            {"role": "system", "content": "You are a helpful AI named Karthi AI."}
+        ]
+
+        # If ONLY text
+        if image is None:
+            messages.append({"role": "user", "content": prompt})
+        else:
+            # Read image bytes
+            img_bytes = await image.read()
+            b64_image = base64.b64encode(img_bytes).decode()
+
+            messages.append({
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt if prompt else "Analyze this image"},
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:{image.content_type};base64,{b64_image}"
+                        }
+                    }
+                ]
+            })
+
         response = client.chat.completions.create(
-            model="gpt-4o-mini",  # or "gpt-4-turbo"
-            messages=[
-                {"role": "system", "content": "You are a helpful AI named Karthi AI."},
-                {"role": "user", "content": prompt}
-            ]
+            model="gpt-4o-mini",
+            messages=messages
         )
+
         reply = response.choices[0].message.content
         return {"reply": reply}
+
     except Exception as e:
-        return {"error": str(e)}
+        return {"reply": f"Server error: {str(e)}"}
