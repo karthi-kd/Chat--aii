@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-app = FastAPI(title="My ChatGPT AI")
+app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
@@ -23,34 +23,33 @@ async def chat(
     image: UploadFile = File(None)
 ):
     try:
-        messages = [
-            {"role": "system", "content": "You are a helpful AI named Karthi AI."}
-        ]
-
         # If ONLY text
         if image is None:
-            messages.append({"role": "user", "content": prompt})
-        else:
-            # Read image bytes
-            img_bytes = await image.read()
-            b64_image = base64.b64encode(img_bytes).decode()
-
-            messages.append({
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt if prompt else "Analyze this image"},
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:{image.content_type};base64,{b64_image}"
-                        }
-                    }
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are a helpful AI named Karthi AI."},
+                    {"role": "user", "content": prompt}
                 ]
-            })
+            )
+            reply = response.choices[0].message.content
+            return {"reply": reply}
+
+        # If image is included
+        img_bytes = await image.read()
 
         response = client.chat.completions.create(
             model="gpt-4o-mini",
-            messages=messages
+            messages=[
+                {"role": "system", "content": "You are a helpful AI named Karthi AI."},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt if prompt else "Analyze this image"},
+                        {"type": "input_image", "image": img_bytes}
+                    ]
+                }
+            ]
         )
 
         reply = response.choices[0].message.content
@@ -58,3 +57,5 @@ async def chat(
 
     except Exception as e:
         return {"reply": f"Server error: {str(e)}"}
+        
+
