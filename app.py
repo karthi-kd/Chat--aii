@@ -1,17 +1,20 @@
 from fastapi import FastAPI, Form, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from openai import OpenAI
 import os
 from dotenv import load_dotenv
 
+# Load .env for API key
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-app = FastAPI()
+app = FastAPI(title="ChatGPT Backend")
 
+# Enable CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # Change to frontend domain in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -24,7 +27,7 @@ async def chat(
     image: UploadFile = File(None)
 ):
     try:
-        # CASE 1 — TEXT ONLY
+        # --- CASE 1: TEXT ONLY ---
         if image is None:
             response = client.responses.create(
                 model="gpt-4o-mini",
@@ -39,8 +42,8 @@ async def chat(
             )
             return {"reply": response.output_text}
 
-        # CASE 2 — TEXT + IMAGE
-        # ❗ Do NOT read bytes, send file object
+        # --- CASE 2: TEXT + IMAGE ---
+        # Send image as file object
         response = client.responses.create(
             model="gpt-4o-mini",
             input=[
@@ -53,7 +56,7 @@ async def chat(
                         },
                         {
                             "type": "input_image",
-                            "image": image.file    # ← CORRECT
+                            "image": image.file  # Correct way
                         }
                     ]
                 }
@@ -63,7 +66,11 @@ async def chat(
         return {"reply": response.output_text}
 
     except Exception as e:
-        return {"reply": f"Server error: {str(e)}"}
+        return JSONResponse(
+            status_code=500,
+            content={"error": "Backend error", "details": str(e)}
+        )
         
+
 
 
