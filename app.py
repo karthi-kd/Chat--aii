@@ -11,8 +11,11 @@ load_dotenv()
 
 # Initialize OpenAI client
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-if not OPENAI_API_KEY:
-    raise ValueError("OPENAI_API_KEY is not set in environment variables")
+client = None
+if OPENAI_API_KEY:
+client = OpenAI(api_key=OPENAI_API_KEY)
+else:
+print("⚠️ OPENAI_API_KEY not found. OpenAI features disabled.")
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
@@ -73,6 +76,7 @@ async def analyze(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
         
+
 
 
 
