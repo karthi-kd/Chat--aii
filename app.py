@@ -1,76 +1,61 @@
-from fastapi import FastAPI, Form, File, UploadFile
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from openai import OpenAI
+import base64
 import os
-from dotenv import load_dotenv
+from fastapi import FastAPI, UploadFile, File, Form
+from fastapi.middleware.cors import CORSMiddleware
+from openai import OpenAI
 
-# Load .env for API key
-load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-app = FastAPI(title="ChatGPT Backend")
+app = FastAPI(title="OpenAI Vision Backend")
 
-# Enable CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Change to frontend domain in production
-    allow_credentials=True,
+    allow_origins=["*"],  # change in production
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+@app.get("/")
+def root():
+    return {"status": "OpenAI backend running"}
 
+# ---------- TEXT ONLY CHAT ----------
 @app.post("/chat")
-async def chat(
-    prompt: str = Form(""),
-    image: UploadFile = File(None)
-):
-    try:
-        # --- CASE 1: TEXT ONLY ---
-        if image is None:
-            response = client.responses.create(
-                model="gpt-4o-mini",
-                input=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": prompt}
-                        ]
-                    }
-                ]
-            )
-            return {"reply": response.output_text}
+async def chat(message: str = Form(...)):
+    response = client.responses.create(
+        model="gpt-4.1-mini",
+        input=message
+    )
+    return {"reply": response.output_text}
 
-        # --- CASE 2: TEXT + IMAGE ---
-        # Send image as file object
-        response = client.responses.create(
-            model="gpt-4o-mini",
-            input=[
+# ---------- IMAGE + TEXT ANALYSIS ----------
+@app.post("/analyze")
+async def analyze(
+    image: UploadFile = File(...),
+    text: str = Form(...)
+):
+    image_bytes = await image.read()
+    image_base64 = base64.b64encode(image_bytes).decode("utf-8")
+
+    response = client.responses.create(
+        model="gpt-4.1-mini",
+        input=[{
+            "role": "user",
+            "content": [
+                {"type": "input_text", "text": text},
                 {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": prompt if prompt else "Analyze this image"
-                        },
-                        {
-                            "type": "input_image",
-                            "image": image.file  # Correct way
-                        }
-                    ]
+                    "type": "input_image",
+                    "image_base64": image_base64
                 }
             ]
-        )
+        }]
+    )
 
-        return {"reply": response.output_text}
-
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"error": "Backend error", "details": str(e)}
-        )
+    return {
+        "result": response.output_text
+    }
         
+
 
 
 
