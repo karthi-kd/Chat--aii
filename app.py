@@ -1,58 +1,94 @@
 import os
-from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
+import base64
+from fastapi import FastAPI, UploadFile, File, Form
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from dotenv import load_dotenv
 from openai import OpenAI
 
-app = FastAPI()
+# Load environment variables
+load_dotenv()
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# Initialize OpenAI client
+client = None
+if OPENAI_API_KEY:
+    client = OpenAI(api_key=OPENAI_API_KEY)
+else:
+    print("⚠️ OPENAI_API_KEY not found")
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="templates")
+# Initialize FastAPI
+app = FastAPI(title="AI Builder Backend")
 
+# Enable CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Use your frontend URL in production
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-@app.get("/", response_class=HTMLResponse)
-async def home(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+# ---------------- ROOT ----------------
+@app.get("/")
+def root():
+    return {"status": "OpenAI backend running"}
 
+# ---------------- TEXT CHAT ----------------
+class ChatRequest(BaseModel):
+    message: str
 
-@app.post("/generate")
-async def generate(request: Request):
+@app.post("/chat")
+async def chat(req: ChatRequest):
+    if not client:
+        return {"error": "OpenAI API key not configured"}
+
     try:
-        body = await request.json()
-        prompt = body.get("prompt")
+        response = client.responses.create(
+            model="gpt-4.1-mini",
+            input=req.message
+        )
+        return {"reply": response.output_text}
+    except Exception as e:
+        return {"error": str(e)}
 
-        if not prompt:
-            return JSONResponse(
-                {"error": "Prompt is required"},
-                status_code=400
-            )
+# ---------------- IMAGE + TEXT ANALYSIS ----------------
+@app.post("/analyze")
+async def analyze(
+    image: UploadFile = File(...),
+    text: str = Form(...)
+):
+    if not client:
+        return {"error": "OpenAI API key not configured"}
+
+    try:
+        # Read and encode image to base64
+        image_bytes = await image.read()
+        image_base64 = base64.b64encode(image_bytes).decode("utf-8")
 
         response = client.responses.create(
             model="gpt-4.1-mini",
             input=[
                 {
-                    "role": "system",
-                    "content": "Generate only valid HTML code. No explanations."
-                },
-                {
                     "role": "user",
-                    "content": prompt
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": text
+                        },
+                        {
+                            "type": "input_image",
+                            "image_base64": image_base64
+                        }
+                    ]
                 }
             ]
         )
 
-        return JSONResponse({
-            "html": response.output_text
-        })
+        return {"result": response.output_text}
 
     except Exception as e:
-        return JSONResponse(
-            {"error": str(e)},
-            status_code=500
-        )
+        return {"error": str(e)}
+
 
 
 
