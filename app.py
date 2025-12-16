@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 from openai import OpenAI
 
-Load environment variables
+#Load environment variables
 
 load_dotenv()
 
@@ -20,7 +20,7 @@ print("⚠️ OPENAI_API_KEY not found")
 
 app = FastAPI(title="OpenAI Vision Backend")
 
-CORS
+#CORS
 
 app.add_middleware(
 CORSMiddleware,
@@ -92,6 +92,7 @@ try:
 
 except Exception as e:  
     return {"error": str(e)}
+
 
 
 
